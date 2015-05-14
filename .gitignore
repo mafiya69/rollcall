@@ -1,1 +1,3 @@
 *.pyc
+#Don`t add SQL DB files
+*.db

@@ -25,3 +25,9 @@ class UnknownTag(Exception):
     Raised when tag is not recognised
     """
     pass
+
+class DatabaseError(Exception):
+    """
+    Raised when there is some problem with DB
+    """
+    pass
