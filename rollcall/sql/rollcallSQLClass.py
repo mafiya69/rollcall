@@ -8,9 +8,9 @@ SQL Class rollcall
 from __future__ import print_function
 import os
 import sys
-import rollcall.exce
+import rollcall.exce as exce
 from rollcall.func_json import TAGS
-from rollcall.main import pDir
+from rollcall.main import pDir, full_path_to
 
 try:
     import sqlite3 as sql
@@ -18,21 +18,18 @@ except ImportError:
     print("SQLite3 is not found!")
     sys.exit()
 
-def find_db_path(dbName, dire = pDir()):
-    """
-    Generates the complete path of a DB
-    returns the complete path
-    """
-    path = os.path.join(os.path.dirname(dire), dbName)
-    return path
+dbNameDef = 'rollcall.db'
+dbPathDef = full_path_to(dbNameDef)
 
-def connect_db(dbName, dire = pDir()):
+def connect_db(dbPath = dbPathDef):
     """
     Connect to DB
     and Return the sqlite3.Connection object
     """
-    dbPath = find_db_path(dbName, dire)
-    conn = sql.connect(dbPath)
+    try:
+        conn = sql.connect(dbPath)
+    except:
+        raise exce.DatabaseError("Unable to open Database File!")
     return conn
 
 def close_db_connection(conn):
@@ -42,26 +39,25 @@ def close_db_connection(conn):
     """
     conn.close()
 
-#Todo : Add tests
-def get_subjects(dbName = 'rollcall.db'):
+def get_subjects(dbPath = dbPathDef):
     """
     Get a List of All Subjects Present in DB
     yield subject
     """
-    conn = connect_db(dbName)
-    command = """SELECT name FROM sqlite_master WHERE type='table'"""
+    conn = connect_db(dbPath)
+    command = "SELECT name FROM sqlite_master WHERE type='table'"
     try:
-        subList = conn.execute(command)
-        subList = subList.fetchall()
+        subQuery = conn.execute(command)
+        subList = subQuery.fetchall()
     except:
         conn.rollback()
         close_db_connection(conn)
         raise exce.DatabaseError("Some problem occurred in DB!")
+    close_db_connection(conn)
     for sub in subList:
         yield sub[0]
 
-#Todo : Add tests
-def get_count_subject_tag(subName, tag = 'p', dbName = 'rollcall.db'):
+def get_count_subject_tag(subName, tag = 'p', dbPath = dbPathDef):
     """
     Get the number of classes in Subject with tag
     """
@@ -69,10 +65,10 @@ def get_count_subject_tag(subName, tag = 'p', dbName = 'rollcall.db'):
     if not TAGS.has_key(tag):
         raise exce.UnknownTag("Tag: %s UNKNOWN" %(tag))
 
-    if not subName in getSubjectList():
+    if not subName in get_subjects(dbPath):
         raise exce.SubjectError("There is no records for %s." %(subName))
 
-    conn = connect_db(dbName)
+    conn = connect_db(dbPath)
     command = """SELECT COUNT(*) FROM %s
     WHERE class_tag=\"%s\"""" % (subName, TAGS[tag])
     try:
@@ -82,18 +78,18 @@ def get_count_subject_tag(subName, tag = 'p', dbName = 'rollcall.db'):
         conn.rollback()
         close_db_connection(conn)
         raise exce.DatabaseError("Some problem occurred in DB!")
+    close_db_connection(conn)
     return count[0][0]
 
-#Todo : Add tests
-def get_total_class_subject(subName, dbName = 'rollcall.db'):
+def get_total_class_subject(subName, dbPath = dbPathDef):
     """
     Get the total classes happened till date
     """
 
-    if not subName in getSubjectList():
+    if not subName in get_subjects(dbPath):
         raise exce.SubjectError("There is no records for %s." %(subName))
 
-    conn = connect_db(dbName)
+    conn = connect_db(dbPath)
     command = """SELECT COUNT(*) FROM %s""" % (subName)
     try:
         count = conn.execute(command)
@@ -102,18 +98,19 @@ def get_total_class_subject(subName, dbName = 'rollcall.db'):
         conn.rollback()
         close_db_connection(conn)
         raise exce.DatabaseError("Some problem occurred in DB!")
+    close_db_connection(conn)
     return count[0][0]
 
 #Todo : Add tests
-def add_subject(subName, dbName = 'rollcall.db'):
+def add_subject(subName, dbPath = dbPathDef):
     """
     Add a Subject to the DB
     """
 
-    if subName in getSubjectList():
+    if subName in get_subjects(dbPath):
         raise exce.SubjectExists("Records for %s are already present." %(subName))
 
-    conn = connect_db(dbName)
+    conn = connect_db(dbPath)
     cur = conn.cursor()
     command = """CREATE TABLE %s
         (
@@ -134,15 +131,15 @@ def add_subject(subName, dbName = 'rollcall.db'):
     close_db_connection(conn)
 
 #Todo : add tests
-def delete_subject(subName, dbName = 'rollcall.db'):
+def delete_subject(subName, dbPath = dbPathDef):
     """
     Delete a Subject if Made by mistake :)
     """
 
-    if not subName in getSubjectList():
+    if not subName in get_subjects(dbPath):
         raise exce.SubjectError("There is no records for %s." %(subName))
 
-    conn = connect_db(dbName)
+    conn = connect_db(dbPath)
     cur = conn.cursor()
     command = """DROP TABLE %s""" % subName
     try:
@@ -154,8 +151,7 @@ def delete_subject(subName, dbName = 'rollcall.db'):
         raise exce.DatabaseError("Some problem occurred in DB!")
     close_db_connection(conn)
 
-#Todo : add tests
-def update_subject(subName, tag = 'p', dbName = 'rollcall.db'):
+def update_subject(subName, tag = 'p', dbPath = dbPathDef):
     """
     Update Subject with Tag
     """
@@ -163,10 +159,10 @@ def update_subject(subName, tag = 'p', dbName = 'rollcall.db'):
     if not TAGS.has_key(tag):
         raise exce.UnknownTag("Tag: %s UNKNOWN" %(tag))
 
-    if not subName in getSubjectList():
+    if not subName in get_subjects(dbPath):
         raise exce.SubjectError("There is no records for %s." %(subName))
 
-    conn = connect_db(dbName)
+    conn = connect_db(dbPath)
     cur = conn.cursor()
     command = """INSERT INTO %s (class_tag)
     VALUES (\"%s\")""" %(subName, TAGS[tag])
@@ -179,8 +175,7 @@ def update_subject(subName, tag = 'p', dbName = 'rollcall.db'):
         raise exce.DatabaseError("Some problem occurred in DB!")
     close_db_connection(conn)
 
-#Todo : Add tests
-def get_subject_tag_percent(subName, tag = 'p', dbName = 'rollcall.db'):
+def get_subject_tag_percent(subName, tag = 'p', dbPath = dbPathDef):
     """
     Get Percent of tag in subName in total Records till Date
     """
@@ -188,10 +183,10 @@ def get_subject_tag_percent(subName, tag = 'p', dbName = 'rollcall.db'):
     if not TAGS.has_key(tag):
         raise exce.UnknownTag("Tag: %s UNKNOWN" %(tag))
 
-    if not subName in getSubjectList():
+    if not subName in get_subjects(dbPath):
         raise exce.SubjectError("There is no records for %s." %(subName))
 
-    countTag = getCountSubjectTag(subName, tag, dbName)
-    countTotal = getTotalClassesSubject(subName)
-    fract = countTag * 1.0 / countTotal
+    count_tag = get_count_subject_tag(subName, tag, dbPath)
+    count_total = get_total_class_subject(subName, dbPath)
+    fract = count_tag * 1.0 / count_total
     return fract*100
